@@ -1,4 +1,6 @@
+import pandas as pd
 import numpy as np
+
 
 # NumPy 2.x renamed trapz to trapezoid
 _trapz = getattr(np, "trapezoid", None) or np.trapz
@@ -43,3 +45,42 @@ def uplift_at_k(score, t, y, k=0.3):
     if t.sum() == 0 or (1 - t).sum() == 0:
         return np.nan
     return y[t == 1].mean() - y[t == 0].mean()
+
+    def decile_table(score, t, y, bins=10):
+    """Observed treated-vs-control gap within each score decile (1 = top)."""
+    df = pd.DataFrame({"score": np.asarray(score), "t": np.asarray(t), "y": np.asarray(y)})
+    # Rank so the highest score gets rank 1, then cut into equal-sized groups
+    df["decile"] = pd.qcut(df["score"].rank(method="first", ascending=False),
+                           bins, labels=range(1, bins + 1))
+
+    rows = []
+    for d, g in df.groupby("decile", observed=True):
+        rate_t = g.loc[g["t"] == 1, "y"].mean()
+        rate_c = g.loc[g["t"] == 0, "y"].mean()
+        rows.append({
+            "decile": d,
+            "n": len(g),
+            "avg_score": g["score"].mean(),
+            "rate_treat": rate_t,
+            "rate_control": rate_c,
+            "observed_uplift": rate_t - rate_c,
+        })
+    return pd.DataFrame(rows).set_index("decile")
+
+
+def bootstrap_ci(metric_fn, score, t, y, n_boot=200, alpha=0.05, seed=0, **kwargs):
+    """Resample customers with replacement to get a confidence interval."""
+    rng = np.random.default_rng(seed)
+    score, t, y = np.asarray(score), np.asarray(t), np.asarray(y)
+
+    values = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, len(t), len(t))
+        values.append(metric_fn(score[idx], t[idx], y[idx], **kwargs))
+    values = np.array(values)
+
+    return {
+        "mean": np.nanmean(values),
+        "low": np.nanpercentile(values, 100 * alpha / 2),
+        "high": np.nanpercentile(values, 100 * (1 - alpha / 2)),
+    }
