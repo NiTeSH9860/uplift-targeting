@@ -1,5 +1,5 @@
 import numpy as np
-from lightgbm import LGBMClassifier
+from lightgbm import LGBMClassifier, LGBMRegressor
 
 # Shared settings: small, regularized trees so we don't overfit noisy conversions
 PARAMS = dict(
@@ -51,3 +51,24 @@ class TLearner:
 
     def predict_uplift(self, X):
         return self.model_t.predict_proba(X)[:, 1] - self.model_c.predict_proba(X)[:, 1]
+
+
+class XLearner:
+    """Uses imputed individual effects so every customer helps train the final model."""
+
+    def fit(self, X, t, y):
+        X, t, y = np.asarray(X), np.asarray(t), np.asarray(y)
+        self.p = t.mean()
+
+        mu_t = LGBMClassifier(**PARAMS).fit(X[t == 1], y[t == 1])
+        mu_c = LGBMClassifier(**PARAMS).fit(X[t == 0], y[t == 0])
+
+        effect_treated = y[t == 1] - mu_c.predict_proba(X[t == 1])[:, 1]
+        effect_control = mu_t.predict_proba(X[t == 0])[:, 1] - y[t == 0]
+
+        self.tau_t = LGBMRegressor(**PARAMS).fit(X[t == 1], effect_treated)
+        self.tau_c = LGBMRegressor(**PARAMS).fit(X[t == 0], effect_control)
+        return self
+
+    def predict_uplift(self, X):
+        return self.p * self.tau_c.predict(X) + (1 - self.p) * self.tau_t.predict(X)

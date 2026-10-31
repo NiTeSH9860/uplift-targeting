@@ -46,7 +46,7 @@ def uplift_at_k(score, t, y, k=0.3):
         return np.nan
     return y[t == 1].mean() - y[t == 0].mean()
 
-    def decile_table(score, t, y, bins=10):
+def decile_table(score, t, y, bins=10):
     """Observed treated-vs-control gap within each score decile (1 = top)."""
     df = pd.DataFrame({"score": np.asarray(score), "t": np.asarray(t), "y": np.asarray(y)})
     # Rank so the highest score gets rank 1, then cut into equal-sized groups
