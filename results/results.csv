@@ -1,0 +1,5 @@
+model,AUUC,AUUC_low,AUUC_high,uplift@30%,corr_with_truth
+Naive P(buy),68.1,35.1,104.3,0.0337,0.282
+S-learner,149.8,121.7,181.2,0.073,0.866
+T-learner,115.1,87.2,146.8,0.0596,0.625
+X-learner,135.6,106.0,163.7,0.065,0.772
