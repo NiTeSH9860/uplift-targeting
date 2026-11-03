@@ -29,8 +29,22 @@ def make_synthetic(n=50_000, p_treat=0.5, seed=0):
     df["y"] = y
     df["true_uplift"] = tau  # never available in real life
     return df
+def load_criteo(sample=None, target="conversion", seed=0,
+                path="data/criteo-uplift-v2.1.csv.gz"):
+    """Load Criteo Uplift v2.1 from a local file.
 
+    target: 'conversion' (rare, ~0.3%) or 'visit' (more common, ~4.7%).
+    """
+    cols = [f"f{i}" for i in range(12)] + ["treatment", target]
+    df = pd.read_csv(path, usecols=cols, dtype={c: "float32" for c in cols})
 
+    df["treatment"] = df["treatment"].astype("int8")
+    df = df.rename(columns={target: "y"})
+    df["y"] = df["y"].astype("int8")
+
+    if sample:
+        df = df.sample(sample, random_state=seed).reset_index(drop=True)
+    return df
 def feature_cols(df):
     drop = {"treatment", "y", "true_uplift"}
     return [c for c in df.columns if c not in drop]
