@@ -1,0 +1,4 @@
+model,AUUC_gain_vs_naive,low,high,prob_better
+S-learner,90.9,8.2,196.1,0.98
+T-learner,-28.2,-278.1,226.0,0.36
+X-learner,-25.2,-276.2,206.1,0.42

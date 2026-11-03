@@ -84,3 +84,24 @@ def bootstrap_ci(metric_fn, score, t, y, n_boot=200, alpha=0.05, seed=0, **kwarg
         "low": np.nanpercentile(values, 100 * alpha / 2),
         "high": np.nanpercentile(values, 100 * (1 - alpha / 2)),
     }
+
+def paired_bootstrap_diff(metric_fn, score_a, score_b, t, y,
+                          n_boot=200, alpha=0.05, seed=0, **kwargs):
+    """CI for metric(A) - metric(B), resampling the SAME customers for both."""
+    rng = np.random.default_rng(seed)
+    score_a, score_b, t, y = map(np.asarray, (score_a, score_b, t, y))
+
+    diffs = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, len(t), len(t))
+        a = metric_fn(score_a[idx], t[idx], y[idx], **kwargs)
+        b = metric_fn(score_b[idx], t[idx], y[idx], **kwargs)
+        diffs.append(a - b)
+    diffs = np.array(diffs)
+
+    return {
+        "mean_diff": np.nanmean(diffs),
+        "low": np.nanpercentile(diffs, 100 * alpha / 2),
+        "high": np.nanpercentile(diffs, 100 * (1 - alpha / 2)),
+        "prob_a_better": float(np.mean(diffs > 0)),
+    }
