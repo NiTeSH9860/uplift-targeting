@@ -1,9 +1,10 @@
 import warnings
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
+
 import numpy as np
 from lightgbm import LGBMClassifier, LGBMRegressor
 
-# Shared settings: small, regularized trees so we don't overfit noisy conversions
+# Default: fine for common outcomes (synthetic data, Criteo visit)
 PARAMS = dict(
     n_estimators=200,
     learning_rate=0.05,
@@ -16,12 +17,30 @@ PARAMS = dict(
     random_state=0,
 )
 
+# For rare outcomes (Criteo conversion, ~0.3%): shallow trees, big leaves,
+# strong regularization so we don't fit noise
+SPARSE_PARAMS = dict(
+    n_estimators=300,
+    learning_rate=0.03,
+    num_leaves=8,
+    min_child_samples=5000,
+    reg_lambda=10.0,
+    subsample=0.8,
+    subsample_freq=1,
+    colsample_bytree=0.8,
+    verbose=-1,
+    random_state=0,
+)
+
 
 class NaiveClassifier:
     """Baseline: rank customers by P(buy). Ignores the campaign entirely."""
 
+    def __init__(self, params=None):
+        self.params = params or PARAMS
+
     def fit(self, X, t, y):
-        self.model = LGBMClassifier(**PARAMS).fit(X, y)
+        self.model = LGBMClassifier(**self.params).fit(X, y)
         return self
 
     def predict_uplift(self, X):
@@ -31,8 +50,11 @@ class NaiveClassifier:
 class SLearner:
     """One model with treatment as a feature."""
 
+    def __init__(self, params=None):
+        self.params = params or PARAMS
+
     def fit(self, X, t, y):
-        self.model = LGBMClassifier(**PARAMS).fit(np.column_stack([X, t]), y)
+        self.model = LGBMClassifier(**self.params).fit(np.column_stack([X, t]), y)
         return self
 
     def predict_uplift(self, X):
@@ -45,10 +67,13 @@ class SLearner:
 class TLearner:
     """Two models: one trained on treated customers, one on control."""
 
+    def __init__(self, params=None):
+        self.params = params or PARAMS
+
     def fit(self, X, t, y):
         X, t, y = np.asarray(X), np.asarray(t), np.asarray(y)
-        self.model_t = LGBMClassifier(**PARAMS).fit(X[t == 1], y[t == 1])
-        self.model_c = LGBMClassifier(**PARAMS).fit(X[t == 0], y[t == 0])
+        self.model_t = LGBMClassifier(**self.params).fit(X[t == 1], y[t == 1])
+        self.model_c = LGBMClassifier(**self.params).fit(X[t == 0], y[t == 0])
         return self
 
     def predict_uplift(self, X):
@@ -58,19 +83,26 @@ class TLearner:
 class XLearner:
     """Uses imputed individual effects so every customer helps train the final model."""
 
+    def __init__(self, params=None):
+        self.params = params or PARAMS
+
     def fit(self, X, t, y):
         X, t, y = np.asarray(X), np.asarray(t), np.asarray(y)
-        self.p = t.mean()
+        self.p = t.mean()  # share of customers who were treated
 
-        mu_t = LGBMClassifier(**PARAMS).fit(X[t == 1], y[t == 1])
-        mu_c = LGBMClassifier(**PARAMS).fit(X[t == 0], y[t == 0])
+        # Step 1: outcome models for each group
+        mu_t = LGBMClassifier(**self.params).fit(X[t == 1], y[t == 1])
+        mu_c = LGBMClassifier(**self.params).fit(X[t == 0], y[t == 0])
 
+        # Step 2: imputed effect for each customer
         effect_treated = y[t == 1] - mu_c.predict_proba(X[t == 1])[:, 1]
         effect_control = mu_t.predict_proba(X[t == 0])[:, 1] - y[t == 0]
 
-        self.tau_t = LGBMRegressor(**PARAMS).fit(X[t == 1], effect_treated)
-        self.tau_c = LGBMRegressor(**PARAMS).fit(X[t == 0], effect_control)
+        # Step 3: regressors that learn the effect from the features
+        self.tau_t = LGBMRegressor(**self.params).fit(X[t == 1], effect_treated)
+        self.tau_c = LGBMRegressor(**self.params).fit(X[t == 0], effect_control)
         return self
 
     def predict_uplift(self, X):
+        # Step 4: blend the two predictions
         return self.p * self.tau_c.predict(X) + (1 - self.p) * self.tau_t.predict(X)

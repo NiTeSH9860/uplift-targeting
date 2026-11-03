@@ -12,7 +12,8 @@ from src.data import make_synthetic, load_criteo, feature_cols
 from src.checks import standardized_mean_diff, ate
 from src.evaluation import (qini_curve, auuc, uplift_at_k, decile_table,
                             bootstrap_ci, paired_bootstrap_diff)
-from src.models.learners import NaiveClassifier, SLearner, TLearner, XLearner
+from src.models.learners import (NaiveClassifier, SLearner, TLearner, XLearner,
+                                 PARAMS, SPARSE_PARAMS)
 
 os.makedirs("results", exist_ok=True)
 
@@ -22,9 +23,15 @@ parser.add_argument("--criteo", type=int, default=0,
                     help="number of Criteo rows to sample; 0 = synthetic data")
 parser.add_argument("--target", default="conversion", choices=["conversion", "visit"],
                     help="Criteo outcome to model")
+parser.add_argument("--params", default="default", choices=["default", "sparse"],
+                    help="LightGBM settings; 'sparse' is for rare outcomes")
 args = parser.parse_args()
 
 tag = f"criteo_{args.target}" if args.criteo else "synthetic"
+if args.params == "sparse":
+    tag += "_sparse"
+params = SPARSE_PARAMS if args.params == "sparse" else PARAMS
+
 df = (load_criteo(sample=args.criteo, target=args.target)
       if args.criteo else make_synthetic(n=100_000))
 feats = feature_cols(df)
@@ -43,12 +50,12 @@ train, test = train_test_split(df, test_size=0.3, random_state=0, stratify=df["t
 X_tr, t_tr, y_tr = train[feats].values, train["treatment"].values, train["y"].values
 X_te, t_te, y_te = test[feats].values, test["treatment"].values, test["y"].values
 
-# 4. Fit models and evaluate
+# 4. Fit models and evaluate (every model uses the same parameter set)
 models = {
-    "Naive P(buy)": NaiveClassifier(),
-    "S-learner": SLearner(),
-    "T-learner": TLearner(),
-    "X-learner": XLearner(),
+    "Naive P(buy)": NaiveClassifier(params),
+    "S-learner": SLearner(params),
+    "T-learner": TLearner(params),
+    "X-learner": XLearner(params),
 }
 
 rows, scores = [], {}
