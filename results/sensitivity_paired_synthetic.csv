@@ -1,0 +1,9 @@
+cost,comparison,profit_diff,ci_low,ci_high
+0.1,S minus Naive,45.4,13.6,82.3
+0.1,S minus Everyone,83.5,46.3,120.3
+0.3,S minus Naive,84.3,57.9,116.2
+0.3,S minus Everyone,216.8,179.6,255.5
+0.5,S minus Naive,37.8,8.3,62.9
+0.5,S minus Everyone,350.7,310.8,387.0
+0.7,S minus Naive,-11.9,-37.9,12.6
+0.7,S minus Everyone,498.5,456.7,538.2
