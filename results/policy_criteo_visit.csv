@@ -1,0 +1,7 @@
+policy,frac_contacted,profit_per_1000,ci_low,ci_high
+Contact nobody,0.0,0.0,0.0,0.0
+Contact everyone,1.0,1.0,-0.9,3.1
+Naive P(buy),0.259,5.6,3.9,7.6
+S-learner,0.214,5.9,4.2,7.7
+T-learner,0.144,5.1,3.6,6.5
+X-learner,0.249,4.7,3.1,6.5
