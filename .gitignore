@@ -1,6 +1,5 @@
 .venv
 data
-models/
 sample_score.json
 sample_recommend.json
 sample_score.json
