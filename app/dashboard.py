@@ -13,6 +13,14 @@ SAMPLE_PATH = Path(__file__).parent / "sample_customers.csv"
 st.set_page_config(page_title="Uplift Targeting", layout="wide")
 
 
+def default_api_url():
+    # On Streamlit Community Cloud the URL comes from the app's secrets
+    try:
+        return st.secrets["API_URL"]
+    except Exception:
+        return "http://127.0.0.1:8000"
+
+
 @st.cache_data
 def load_sample():
     return pd.read_csv(SAMPLE_PATH)
@@ -26,7 +34,7 @@ def call_recommend(api_url, customers, value, cost, max_contacts):
     }
     if max_contacts is not None:
         payload["max_contacts"] = int(max_contacts)
-    r = httpx.post(f"{api_url.rstrip('/')}/recommend", json=payload, timeout=60)
+    r = httpx.post(f"{api_url.rstrip('/')}/recommend", json=payload, timeout=120)
     r.raise_for_status()
     return r.json()
 
@@ -40,7 +48,7 @@ st.write(
 
 with st.sidebar:
     st.header("Settings")
-    api_url = st.text_input("API URL", "http://127.0.0.1:8000")
+    api_url = st.text_input("API URL", default_api_url())
     value = st.number_input("Value of one incremental visit", min_value=0.01,
                             value=1.0, step=0.1)
     cost = st.number_input("Cost of contacting one customer", min_value=0.0,
@@ -75,9 +83,14 @@ else:
 customers = customers.reset_index(drop=True)
 
 try:
-    result = call_recommend(api_url, customers, value, cost, max_contacts)
+    with st.spinner("Contacting the API. If the free server was idle, it can take about a minute to wake up."):
+        result = call_recommend(api_url, customers, value, cost, max_contacts)
 except httpx.ConnectError:
-    st.error("Could not reach the API. Start it with: uvicorn app.api:app")
+    st.error("Could not reach the API. Check the API URL in the sidebar, "
+             "or start it locally with: uvicorn app.api:app")
+    st.stop()
+except httpx.TimeoutException:
+    st.error("The API took too long to respond. It may still be waking up; reload the page in a minute.")
     st.stop()
 except httpx.HTTPStatusError as e:
     st.error(f"The API returned {e.response.status_code}: {e.response.text}")
